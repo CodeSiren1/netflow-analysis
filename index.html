@@ -1,0 +1,187 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>NetFlow Live Simulation Dashboard</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.js"></script>
+
+ <link rel="stylesheet" href="style.css">
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@300;400;500;600&display=swap" rel="stylesheet">
+</head>
+<body>
+
+<header>
+  <div class="logo">NET<span>FLOW</span>::<span>SIM</span></div>
+  <div class="hdr-center">
+    <div class="live-pill"><div class="dot"></div>SIMULATING</div>
+    <div class="hstat">FLOWS/SEC <strong id="h-fps">0</strong></div>
+    <div class="hstat">TOTAL FLOWS <strong id="h-total">0</strong></div>
+    <div class="hstat">WINDOW <strong>4H</strong></div>
+    <div class="hstat">ELAPSED <strong id="h-elapsed">00:00:00</strong></div>
+    <div class="speed-ctrl">
+      SPEED
+      <input type="range" id="speed-range" min="1" max="10" value="3" oninput="setSpeed(this.value)">
+      <span id="speed-lbl">3x</span>
+    </div>
+  </div>
+  <div class="hdr-right">
+    <button class="btn-sim pause" id="btn-pause" onclick="togglePause()">⏸ PAUSE</button>
+    <button class="btn-sim reset" onclick="resetSim()">↺ RESET</button>
+  </div>
+</header>
+
+<div class="wrap">
+
+  <!-- Window Progress Bar -->
+  <div class="win-bar">
+    <span class="win-lbl">4H WINDOW</span>
+    <div class="win-track"><div class="win-fill" id="win-fill" style="width:0%"></div></div>
+    <span class="win-pct" id="win-pct">0%</span>
+    <span class="win-lbl" style="color:var(--text3)">REFRESHES IN <strong id="win-refresh" style="color:var(--cyan)">—</strong></span>
+  </div>
+
+  <!-- Alert Banner -->
+  <div class="alert-banner" id="alert-banner">
+    <span class="alert-icon">⚠</span>
+    <span id="alert-msg">Suspicious traffic detected</span>
+    <span class="badge err" style="margin-left:auto">ALERT</span>
+  </div>
+
+  <!-- Live Ticker -->
+  <div class="ticker" id="ticker">
+    <div class="tick-row"><span class="t-time">00:00:00</span><span class="t-src" style="color:var(--text3)">Waiting for traffic simulation...</span></div>
+  </div>
+
+  <!-- Metrics -->
+  <div class="metrics">
+    <div class="mc"><div class="mc-lbl">Total Flows</div><div class="mc-val" id="m-flows">0</div><div class="mc-sub">captured</div></div>
+    <div class="mc g"><div class="mc-lbl">Internal Assets</div><div class="mc-val" id="m-assets">0</div><div class="mc-sub">unique IPs</div></div>
+    <div class="mc"><div class="mc-lbl">Public IPs</div><div class="mc-val" id="m-pubips">0</div><div class="mc-sub">external</div></div>
+    <div class="mc a"><div class="mc-lbl">NAT Bypass</div><div class="mc-val" id="m-nat">0</div><div class="mc-sub">not via GW</div></div>
+    <div class="mc p"><div class="mc-lbl">Protocols</div><div class="mc-val" id="m-proto">0</div><div class="mc-sub">in use</div></div>
+    <div class="mc"><div class="mc-lbl">Unique Ports</div><div class="mc-val" id="m-ports">0</div><div class="mc-sub">observed</div></div>
+    <div class="mc r"><div class="mc-lbl">Alerts</div><div class="mc-val" id="m-alerts">0</div><div class="mc-sub">suspicious</div></div>
+  </div>
+
+  <!-- Tabs -->
+  <div class="tabs">
+    <button class="tab active" onclick="showTab('overview',this)">Overview</button>
+    <button class="tab" onclick="showTab('flows',this)">Live Flows</button>
+    <button class="tab" onclick="showTab('assets',this)">Assets</button>
+    <button class="tab" onclick="showTab('nat',this)">NAT / Gateway</button>
+    <button class="tab" onclick="showTab('proto',this)">Protocols</button>
+    <button class="tab" onclick="showTab('topology',this)">Topology Graph</button>
+    <button class="tab" onclick="showTab('compliance',this)">Compliance</button>
+  </div>
+
+  <!-- OVERVIEW -->
+  <div class="section active" id="sec-overview">
+    <div class="main-grid">
+      <div class="card">
+        <div class="ctitle">Traffic Rate (flows/sec)</div>
+        <div class="chart-wrap" style="height:200px"><canvas id="chart-rate"></canvas></div>
+      </div>
+      <div class="card">
+        <div class="ctitle">Protocol Distribution</div>
+        <div class="chart-wrap" style="height:200px"><canvas id="chart-proto-pie"></canvas></div>
+      </div>
+      <div class="card">
+        <div class="ctitle g">Top Internal Assets by Flows</div>
+        <div class="chart-wrap" style="height:200px"><canvas id="chart-assets"></canvas></div>
+      </div>
+      <div class="card">
+        <div class="ctitle a">Top Public IPs</div>
+        <div class="chart-wrap" style="height:200px"><canvas id="chart-pubips"></canvas></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- LIVE FLOWS -->
+  <div class="section" id="sec-flows">
+    <div class="card full">
+      <div class="ctitle">Live Flow Records (most recent 200)</div>
+      <div class="ftable-wrap" id="flow-table-wrap">
+        <table>
+          <thead><tr><th>Time</th><th>Src IP</th><th>Dst IP</th><th>Proto</th><th>Src Port</th><th>Dst Port</th><th>Bytes</th><th>Packets</th><th>Via GW</th><th>Flag</th></tr></thead>
+          <tbody id="flow-tbody"></tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <!-- ASSETS -->
+  <div class="section" id="sec-assets">
+    <div class="main-grid">
+      <div class="card">
+        <div class="ctitle g">Internal Assets Detected</div>
+        <div class="asset-list" id="asset-list"></div>
+      </div>
+      <div class="card">
+        <div class="ctitle">Public IPs Seen</div>
+        <div class="ftable-wrap" style="max-height:320px">
+          <table>
+            <thead><tr><th>Public IP</th><th>Org</th><th>Port</th><th>Flows</th><th>Risk</th></tr></thead>
+            <tbody id="pubip-tbody"></tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- NAT -->
+  <div class="section" id="sec-nat">
+    <div class="card full">
+      <div class="ctitle">Gateway: <code style="font-size:12px">10.0.0.1</code> &nbsp;|&nbsp; IPs Bypassing Gateway (proposed NAT)</div>
+      <div class="ftable-wrap">
+        <table>
+          <thead><tr><th>Internal IP</th><th>Role</th><th>Direct Egress To</th><th>Protocol</th><th>Port</th><th>Flows</th><th>First Seen</th><th>Action</th></tr></thead>
+          <tbody id="nat-tbody"></tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <!-- PROTO -->
+  <div class="section" id="sec-proto">
+    <div class="main-grid">
+      <div class="card">
+        <div class="ctitle p">Protocol Flow Counts</div>
+        <div class="chart-wrap" style="height:280px"><canvas id="chart-proto-bar"></canvas></div>
+      </div>
+      <div class="card">
+        <div class="ctitle">Port Activity</div>
+        <div class="ftable-wrap" style="max-height:320px">
+          <table>
+            <thead><tr><th>Port</th><th>Protocol</th><th>Flows</th><th>Sanction</th></tr></thead>
+            <tbody id="port-tbody"></tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- COMPLIANCE -->
+  <div class="section" id="sec-compliance">
+    <div class="card full">
+      <div class="ctitle r">Compliance Scorecard (live, updates every cycle)</div>
+      <div class="ftable-wrap">
+        <table>
+          <thead><tr><th>Asset IP</th><th>Role</th><th>Protocols</th><th>Ports</th><th>Via Gateway</th><th>Flows</th><th>Score</th><th>Status</th></tr></thead>
+          <tbody id="comp-tbody"></tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <!-- TOPOLOGY -->
+  <div class="section" id="sec-topology">
+    <div id="topo-root"></div>
+  </div>
+
+</div>
+<footer>DISAI Students Chapter &nbsp;|&nbsp; NetFlow Live Simulation &nbsp;|&nbsp; 4-Hour Capture Window &nbsp;|&nbsp; Flows generated in real-time</footer>
+<script src="script.js"></script>
+</body>
+</html>
+
