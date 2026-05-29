@@ -1,9 +1,9 @@
 # NetFlow Analysis Dashboard
 
-A lightweight real-time network traffic monitoring and NetFlow analysis dashboard built using Node.js and JavaScript.
+A lightweight network traffic monitoring and NetFlow analysis dashboard built using Node.js and JavaScript.
 
 ## Features
-- Real-time network flow visualization
+- Network flow visualization
 - Traffic monitoring dashboard
 - Backend API integration
 - Interactive frontend interface
